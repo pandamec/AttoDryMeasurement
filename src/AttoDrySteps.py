@@ -2,12 +2,23 @@ class AttoDrySteps:
     def __init__(self,
                  TestMode: int,
                 ControlMode: int,
-                TargetTemperaturen:list[float],
+                TimeControlMode:int,
+                Temperaturen:list[float],
                 TimeStep: int):
+
         self.TestMode = TestMode
         self.ControlMode = ControlMode
-        self.TargetTemperaturen = TargetTemperaturen
+        self.TimeControlMode = TimeControlMode
+        self.Temperaturen = Temperaturen
         self.TimeStep = TimeStep
+
+        if TestMode == 2:
+            T_target = sorted(self.Temperaturen, reverse=True)
+
+        else:
+            T_target = sorted(self.Temperaturen)
+        self.TargetTemperaturen=T_Target
+            
 
     def simulation(self):
 
