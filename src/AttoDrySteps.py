@@ -1,24 +1,64 @@
+import numpy as np
+import matplotlib.pyplot as plt
+import time
+from datetime import datetime
+
 class AttoDrySteps:
-    def __init__(self,
-                 TestMode: int,
-                ControlMode: int,
-                TimeControlMode:int,
-                Temperaturen:list[float],
-                TimeStep: int):
+    def __init__(self, AttoDrySteps_Status=False,
+                 **kwargs):
 
-        self.TestMode = TestMode
-        self.ControlMode = ControlMode
-        self.TimeControlMode = TimeControlMode
-        self.Temperaturen = Temperaturen
-        self.TimeStep = TimeStep
+        self.Status=AttoDrySteps_Status
+        params=kwargs
+        self.TestMode = params.get("TestMode")
+        self.ControlMode = params.get("ControlMode")
+        self.TimeControlMode = params.get("TimeControlMode")
+        self.Temperaturen = params.get("Temperaturen")
+        self.TimeStep = params.get("TimeStep")
 
-        if TestMode == 2:
-            T_target = sorted(self.Temperaturen, reverse=True)
+        if self.TestMode == 2:
+            self.T_target = sorted(self.Temperaturen, reverse=True)
 
         else:
-            T_target = sorted(self.Temperaturen)
-        self.TargetTemperaturen=T_Target
-            
+            self.T_target = sorted(self.Temperaturen)
+
+    def bestätigung(self):
+        """Confirm the test parameters before starting"""
+        """Test mode 1 means measurement during the heating up, 2 during the cooling down"""
+        """Control mode 1 means only sample-plate control, 2 means both sample and cold-plate control"""
+
+        t = 0
+        for i in self.T_target:
+            t = t + self.TimeStep
+
+        print("The estimated time to complete the test is min " + str(
+            t / 3600) + " hours" + " (Time for reaching the target temperature and measurement time not considered)")
+
+        if self.TestMode == 1:
+            print("The measurement will be carried out during the heating up")
+        else:
+            print("The measurement will be carried out during the cooling down")
+
+        print("The following temperatures will be set (in this order) " + str(self.T_target))
+
+        if self.ControlMode == 1:
+            print("Only the temperature of the sample plate will be controlled")
+        else:
+            print(
+                "Both temperature of the sample plate and cold plate will be controlled. If the mode is heating up, the cold plate has to be cooled down again until 4 K after the measurement is completed.")
+
+    def computeColdplateTemperature(self,T):
+        """Set the minimum delta required between the sample and coldplate based on 25.09.25 measurement"""
+        ## von abkühlung
+        if 75 < T <= 300:
+            delta = 10
+        elif 50 < T <= 75:
+            delta = 15
+        elif 25 < T <= 50:
+            delta = 10
+        elif T <= 25:
+            delta = 5
+
+        return delta
 
     def simulation(self):
 
@@ -26,12 +66,11 @@ class AttoDrySteps:
         # n=0
         total_T = []
         accu = 0
-        if Parameters.TestMode == 1:
+        if self.TestMode == 1:
             delta = (2 * 3600) / (300 - 5)
             T_current = 5
-            for i in Parameters.TargetTemperaturen:
-                accu = accu + Parameters.TimeStep + Parameters.TimeMeasurement * len(
-                    Parameters.Strom) + Parameters.TimeSleepCurrent * len(Parameters.Strom) + (i - T_current) * delta
+            for i in self.T_target:
+                accu = accu + self.TimeStep + (i - T_current) * delta
                 total.append(accu)
                 total_T.append(i)
                 T_current = i
@@ -39,9 +78,8 @@ class AttoDrySteps:
         else:
             delta = (8 * 3600) / (300 - 5)
             T_current = 293
-            for i in Parameters.TargetTemperaturen:
-                accu = accu + Parameters.TimeStep + Parameters.TimeMeasurement * len(
-                    Parameters.Strom) + Parameters.TimeSleepCurrent * len(Parameters.Strom) + (T_current - i) * delta
+            for i in self.T_target:
+                accu = accu + (T_current - i) * delta
                 total.append(accu)
                 total_T.append(i)
                 T_current = i
@@ -56,36 +94,14 @@ class AttoDrySteps:
                 if i <= total[n] and i > time_trigger:
                     time2.append(i)
                     Temp.append(total_T[n])
-                    Temp_coldplate.append(total_T[n] - computeColdplateTemperature(total_T[n]))
+                    delta=self.computeColdplateTemperature(total_T[n])
+                    Temp_coldplate.append(total_T[n] - delta)
                     time_trigger = i
-        # Temperaturen=Parameters.TargetTemperaturen
-        # Temp=[]
-        # Temp_coldplate=[]
-        # t=0
-        # n=0
-        # Time_increment=Parameters.TimeStep + Parameters.TimeMeasurement * len(Parameters.Strom) + Parameters.TimeSleepCurrent * len(Parameters.Strom)
-        # for ii in T:
-        #   if ii<=t+Time_increment:
-        #       Temp.append(Temperaturen[n])
-        #       Temp_coldplate.append(Temperaturen[n]-computeColdplateTemperature(Temperaturen[n]))
-        #   else:
-        #       t=t+Time_increment
-        #       if n+1<len(Temperaturen):
-        #          Temp.append(Temperaturen[n])
-        #          Temp_coldplate.append(Temperaturen[n]-computeColdplateTemperature(Temperaturen[n]))
-        #         n=n+1
-        #  if n==0:
-        #      Time_increment=abs(Temperaturen[1] - Temperaturen[0] ) * delta
-        #  else:
-        #      Time_increment = abs(Temperaturen[n] - Temperaturen[n-1]) * delta
-        # else:
-        #  Temp.append(Temperaturen[n])
-        #  Temp_coldplate.append(Temperaturen[n]-computeColdplateTemperature(Temperaturen[n]))
 
         return time2, Temp, Temp_coldplate
 
     def plotSimulation(self):
-        s = simulation(Parameters)
+        s = self.simulation()
         T = np.array(s[0])
         Temp = s[1]
         Temp_coldplate = s[2]
@@ -103,20 +119,16 @@ class AttoDrySteps:
         plt.legend()
         plt.show()
 
+    def perfomSimpleApproach(self, T):
 
-    def computeColdplateTemperature(T):
-        """Set the minimum delta required between the sample and coldplate based september 25 measurement"""
-        ## von abkühlung
-        if 75 < T <= 300:
-            delta = 10
-        elif 50 < T <= 75:
-            delta = 15
-        elif 25 < T <= 50:
-            delta = 10
-        elif T <= 25:
-            delta = 5
+        """Perform an approach based on the time step set by the user. No optimization executed"""
+        self.startControl(T)
 
-        return delta
+        if self.ControlMode == 2:  # Coldplate control
+            T_coldplate = T - self.computeColdplateTemperature(T)
+            self.startControlExchange(T_coldplate)
+
+        time.sleep(self.TimeStep)
 
 
     def getcoolingrate(t):
@@ -139,6 +151,7 @@ class AttoDrySteps:
         dTds = (TS2 - TS1) / t
 
         return dTds
+
 
 
     def perform_approach(self):
